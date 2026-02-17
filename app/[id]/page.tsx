@@ -18,6 +18,7 @@ export default async function ConversationPage({
     id: msg.id,
     role: msg.role as 'user' | 'assistant',
     parts: msg.parts as Array<{ type: 'text'; text: string }>,
+    piiSpans: msg.piiSpans as Array<{ start: number; end: number; type: string; text: string }> | null,
   }))
 
   return <ConversationChat conversationId={id} initialMessages={initialMessages} />

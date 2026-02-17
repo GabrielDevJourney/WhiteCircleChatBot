@@ -17,10 +17,20 @@ export function ConversationChat({
     id: string
     role: 'user' | 'assistant'
     parts: Array<{ type: 'text'; text: string }>
+    piiSpans: Array<{ start: number; end: number; type: string; text: string }> | null
   }>
 }) {
   const hasSentPending = useRef(false)
-  const [piiMap, setPiiMap] = useState<Map<string, PiiSpan[]>>(new Map())
+  const [piiMap, setPiiMap] = useState<Map<string, PiiSpan[]>>(() => {
+    const map = new Map<string, PiiSpan[]>()
+    for (const msg of initialMessages) {
+      if (msg.role === 'user' && msg.piiSpans && msg.piiSpans.length > 0) {
+        const text = msg.parts.map((p) => p.text).join('')
+        map.set(text, msg.piiSpans)
+      }
+    }
+    return map
+  })
   const [pendingPiiTexts, setPendingPiiTexts] = useState<Set<string>>(new Set())
 
   const { messages, status, error, sendMessage, regenerate } = useChat<
@@ -37,16 +47,15 @@ export function ConversationChat({
   async function handleSend(text: string) {
     setPendingPiiTexts((prev) => new Set(prev).add(text))
 
-    const piiPromise = scanPii(text)
-    sendMessageRef.current({ text }, { body: { conversationId } })
-
-    const spans = await piiPromise
+    const spans = await scanPii(text)
     setPiiMap((prev) => new Map(prev).set(text, spans))
     setPendingPiiTexts((prev) => {
       const next = new Set(prev)
       next.delete(text)
       return next
     })
+
+    sendMessageRef.current({ text }, { body: { conversationId, piiSpans: spans } })
   }
 
   useEffect(() => {

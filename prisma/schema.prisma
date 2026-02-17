@@ -26,6 +26,7 @@ model Message {
   conversationId String
   role           String
   parts          Json
+  piiSpans       Json?
   createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 

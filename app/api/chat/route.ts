@@ -5,7 +5,7 @@ import { CHAT_SYSTEM_PROMPT } from '@/lib/prompts'
 import { revalidatePath } from 'next/cache'
 
 export async function POST(req: Request) {
-  const { messages, conversationId } = await req.json()
+  const { messages, conversationId, piiSpans } = await req.json()
 
   const result = streamText({
     model: chatModel,
@@ -25,6 +25,7 @@ export async function POST(req: Request) {
           conversationId,
           role: 'user',
           parts: lastUserMessage.parts,
+          piiSpans: piiSpans ?? null,
         })
       }
 
