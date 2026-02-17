@@ -2,7 +2,7 @@
 
 import { useChat } from '@ai-sdk/react'
 import type { UIMessage } from 'ai'
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChatMessages } from '@/components/chat-messages'
 import { ChatInput } from '@/components/chat-input'
 import { scanPii } from '@/app/actions/pii'
@@ -21,37 +21,33 @@ export function ConversationChat({
 }) {
   const hasSentPending = useRef(false)
   const [piiMap, setPiiMap] = useState<Map<string, PiiSpan[]>>(new Map())
-  const [pendingPiiTexts, setPendingPiiTexts] = useState<Set<string>>(
-    new Set(),
-  )
+  const [pendingPiiTexts, setPendingPiiTexts] = useState<Set<string>>(new Set())
 
-  const { messages, status, error, sendMessage, regenerate } =
-    useChat<UIMessage<MessageMetadata>>({
-      initialMessages: initialMessages as UIMessage<MessageMetadata>[],
-      body: { conversationId },
+  const { messages, status, error, sendMessage, regenerate } = useChat<
+    UIMessage<MessageMetadata>
+  >({
+    messages: initialMessages as UIMessage<MessageMetadata>[],
+  })
+
+  const sendMessageRef = useRef(sendMessage)
+  useEffect(() => {
+    sendMessageRef.current = sendMessage
+  }, [sendMessage])
+
+  async function handleSend(text: string) {
+    setPendingPiiTexts((prev) => new Set(prev).add(text))
+
+    const piiPromise = scanPii(text)
+    sendMessageRef.current({ text }, { body: { conversationId } })
+
+    const spans = await piiPromise
+    setPiiMap((prev) => new Map(prev).set(text, spans))
+    setPendingPiiTexts((prev) => {
+      const next = new Set(prev)
+      next.delete(text)
+      return next
     })
-
-  const handleSend = useCallback(
-    async (text: string) => {
-      // Mark as pending PII scan
-      setPendingPiiTexts((prev) => new Set(prev).add(text))
-
-      // Fire PII scan and AI stream in parallel
-      const piiPromise = scanPii(text)
-      sendMessage({ text })
-
-      // Wait for PII results — the AI response streams in the background
-      // but ChatMessages hides it until this resolves
-      const spans = await piiPromise
-      setPiiMap((prev) => new Map(prev).set(text, spans))
-      setPendingPiiTexts((prev) => {
-        const next = new Set(prev)
-        next.delete(text)
-        return next
-      })
-    },
-    [sendMessage],
-  )
+  }
 
   useEffect(() => {
     if (hasSentPending.current) return
@@ -61,9 +57,9 @@ export function ConversationChat({
     const pendingText = sessionStorage.getItem(key)
     if (pendingText) {
       sessionStorage.removeItem(key)
-      handleSend(pendingText)
+      queueMicrotask(() => handleSend(pendingText))
     }
-  }, [conversationId, handleSend])
+  })
 
   return (
     <div className="flex flex-1 flex-col bg-background">
